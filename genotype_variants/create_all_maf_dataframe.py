@@ -54,6 +54,7 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not rename samples in Tumor_Sample_Barcode for simplex duplex data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
         try:
             df_ds.set_index(mutation_key, drop=False, inplace=True)
@@ -66,6 +67,7 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not reset the index for simplex duplex data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
     # Prep Standard
     if df_s is not None:
@@ -107,16 +109,16 @@ def create_all_maf_dataframe(
             exit(1)
 
         try:
-            df_s["t_total_count_reverse_standard"] = (
-                df_s["t_total_count_standard"] - df_ds["t_total_count_forward_standard"]
+            df_s["t_alt_count_reverse_standard"] = (
+                df_s["t_alt_count_standard"]
+                - df_s["t_alt_count_forward_standard"]
             )
             df_s["t_ref_count_reverse_standard"] = (
-                df_s["t_total_count_reverse_standard"]
-                - df_ds["t_ref_count_forward_standard"]
+                df_s["t_ref_count_standard"]
+                - df_s["t_ref_count_forward_standard"]
             )
-            df_s["t_alt_count_reverse_standard"] = (
-                df_s["t_total_count_reverse_standard"]
-                - df_ds["t_alt_count_forward_standard"]
+            df_s["t_total_count_reverse_standard"] = (
+                df_s["t_total_count_standard"] - df_s["t_total_count_forward_standard"]
             )
             logger.debug(
                 "genotype:variants:small_variants::create_all_maf_dataframe:: Successfully generated reverse count columns in standard data frame"
@@ -130,7 +132,7 @@ def create_all_maf_dataframe(
             exit(1)
 
         try:
-            df_d["Tumor_Sample_Barcode"] = df_d["Tumor_Sample_Barcode"].str.replace(
+            df_s["Tumor_Sample_Barcode"] = df_s["Tumor_Sample_Barcode"].str.replace(
                 "-STANDARD", ""
             )
             logger.debug(
@@ -142,9 +144,10 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not rename samples in Tumor_Sample_Barcode for standard data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
         try:
-            df_d.set_index(mutation_key, drop=False, inplace=True)
+            df_s.set_index(mutation_key, drop=False, inplace=True)
             logger.debug(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Successfully reset the index for standard data frame"
             )
@@ -154,6 +157,7 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not reset the index for standard data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
     # Prep Original
     if df_o is not None:
@@ -168,6 +172,7 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not reset the index for original data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
     # Merge STANDARD with DUPLEX-SIMPLEX data frame
     df_s_ds = None
@@ -215,15 +220,26 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not reset the index for merged data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
     # Merge Original with STANDARD-DUPLEX-SIMPLEX data frame
     df_o_s_ds = None
     if df_s_ds is not None:
         try:
-            df_ds = df_ds.reindex(df_o.index)
+            df_s_ds = df_s_ds.reindex(df_o.index)
             df_o_s_ds = df_o.merge(
                 df_s_ds[
                     [
+                        "t_ref_count_standard",
+                        "t_alt_count_standard",
+                        "t_total_count_standard",
+                        "t_variant_frequency_standard",
+                        "t_ref_count_forward_standard",
+                        "t_alt_count_forward_standard",
+                        "t_total_count_forward_standard",
+                        "t_ref_count_reverse_standard",
+                        "t_alt_count_reverse_standard",
+                        "t_total_count_reverse_standard",
                         "t_ref_count_fragment_simplex",
                         "t_alt_count_fragment_simplex",
                         "t_total_count_fragment_simplex",
@@ -263,7 +279,56 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not reset the index for merged data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
+    # Merge Original MAF data frame with STANDARD MAF data frame
+    df_o_s = None
+    if df_o is not None and df_s is not None:
+        try:
+            df_s = df_s.reindex(df_o.index)
+            df_o_s = df_o.merge(
+                df_s[
+                    [
+                        "t_ref_count_standard",
+                        "t_alt_count_standard",
+                        "t_total_count_standard",
+                        "t_variant_frequency_standard",
+                        "t_ref_count_forward_standard",
+                        "t_alt_count_forward_standard",
+                        "t_total_count_forward_standard",
+                        "t_ref_count_reverse_standard",
+                        "t_alt_count_reverse_standard",
+                        "t_total_count_reverse_standard",
+                    ]
+                ],
+                left_index=True,
+                right_index=True,
+            )
+            logger.info(
+                "genotype_variants:small_variants:create_all_maf_dataframe:: Successfully created merge data frame for original, standard, simplex and duplex data"
+            )
+        except:
+            e = sys.exc_info()[0]
+            logger.error(
+                "genotype:variants:small_variants:create_all_maf_dataframe:: Could not create merge data frame for original, standard, simplex and duplex data due to error, %s",
+                e,
+            )
+            exit(1)
+
+        try:
+            df_o_s.set_index(mutation_key, drop=False, inplace=True)
+            logger.debug(
+                "genotype:variants:small_variants:create_all_maf_dataframe:: Successfully reset the index for merged data frame"
+            )
+        except:
+            e = sys.exc_info()[0]
+            logger.error(
+                "genotype:variants:small_variants:create_all_maf_dataframe:: Could not reset the index for merged data frame, due to error, %s",
+                e,
+            )
+            exit(1)
+
+    # Merge original maf data frame with duplex and simplex and duplex data frame
     df_o_ds = None
     if df_ds is not None and df_o is not None:
         try:
@@ -310,6 +375,7 @@ def create_all_maf_dataframe(
                 "genotype:variants:small_variants:create_all_maf_dataframe:: Could not reset the index for merged data frame, due to error, %s",
                 e,
             )
+            exit(1)
 
     logger.info("Successfully merged data frame")
 
@@ -317,5 +383,7 @@ def create_all_maf_dataframe(
         return df_o_s_ds
     elif df_o_ds is not None:
         return df_o_ds
+    elif df_o_s is not None:
+        return df_o_s
     else:
         return df_s_ds

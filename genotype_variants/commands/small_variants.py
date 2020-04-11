@@ -57,6 +57,7 @@ def cli():
     pass
 
 
+# Generate
 @cli.command()
 @click.option(
     "-i",
@@ -151,12 +152,14 @@ def generate(
     filter_duplicate,
     fragment_count,
     mapping_quality,
-    threads
+    threads,
 ):
     """Command that helps to generate genotyped MAF,
     the output file will be labelled with
     patient identifier as prefix"""
-    logger_output = pathlib.Path.cwd().joinpath("genotype_variants.log")
+    pid = os.getpid()
+    logger_file = "genotype_variants_" + str(pid) + ".log"
+    logger_output = pathlib.Path.cwd().joinpath(logger_file)
     fh = logging.FileHandler(logger_output)
     formatter = logging.Formatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -298,6 +301,9 @@ def generate_gbcms_cmd(
     mapping_quality,
     threads,
 ):
+
+    """This will help generate command for GetBaseCountMultiSample"""
+
     sample_id = patient_id + "-" + btype
     output_maf = pathlib.Path.cwd().joinpath(sample_id + "_genotyped.maf")
 
@@ -327,6 +333,7 @@ def generate_gbcms_cmd(
     return (cmd, output_maf)
 
 
+# Merge
 @cli.command()
 @click.option(
     "-i",
@@ -375,7 +382,9 @@ def merge(
     the program will generate merged genotypes as well.
     The output file will be based on the give alphanumeric patient identifier as prefix.
     """
-    logger_output = pathlib.Path.cwd().joinpath("genotype_variants.log")
+    pid = os.getpid()
+    logger_file = "genotype_variants_" + str(pid) + ".log"
+    logger_output = pathlib.Path.cwd().joinpath(logger_file)
     fh = logging.FileHandler(logger_output)
     formatter = logging.Formatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -411,21 +420,25 @@ def merge(
         logger.info(
             "genotype_variants:small_variants:merge:: Original MAF -> %s", input_maf
         )
-        o_maf = pd.read_csv(input_maf, sep="\t", header="infer")
+        o_maf = pd.read_csv(input_maf, sep="\t", header="infer", index_col=False)
     if input_standard_maf:
         logger.info(
             "genotype_variants:small_variants:merge:: STANDARD BAM MAF -> %s",
             input_standard_maf,
         )
-        i_maf = pd.read_csv(input_standard_maf, sep="\t", header="infer")
+        i_maf = pd.read_csv(
+            input_standard_maf, sep="\t", header="infer", index_col=False
+        )
     if input_duplex_maf:
-        d_maf = pd.read_csv(input_duplex_maf, sep="\t", header="infer")
+        d_maf = pd.read_csv(input_duplex_maf, sep="\t", header="infer", index_col=False)
         logger.info(
             "genotype_variants:small_variants:merge:: DUPLEX BAM MAF -> %s",
             input_duplex_maf,
         )
     if input_simplex_maf:
-        s_maf = pd.read_csv(input_simplex_maf, sep="\t", header="infer")
+        s_maf = pd.read_csv(
+            input_simplex_maf, sep="\t", header="infer", index_col=False
+        )
         logger.info(
             "genotype_variants:small_variants:merge:: SIMPLEX BAM MAF -> %s",
             input_simplex_maf,
@@ -436,10 +449,14 @@ def merge(
 
     if d_maf is not None and s_maf is not None:
         ds_maf = cdsd(s_maf, d_maf)
+        file_name = pathlib.Path.cwd().joinpath(
+            patient_id + "-SIMPLEX-DUPLEX" + "_genotyped.maf"
+        )
+        write_csv(file_name, ds_maf)
 
     # generate data frame based on satisfying conditions
     file_name = None
-    (df_o_s_ds, df_s_ds, df_s_ds) = None, None, None
+    (df_o_s_ds, df_o_s, df_s_ds, df_s_ds) = None, None, None, None
     if o_maf is not None and i_maf is not None and ds_maf is not None:
         df_o_s_ds = camd(o_maf, i_maf, ds_maf)
         file_name = pathlib.Path.cwd().joinpath(
@@ -447,7 +464,11 @@ def merge(
         )
         write_csv(file_name, df_o_s_ds)
     elif o_maf is not None and i_maf is not None:
-        pass
+        df_o_s = camd(o_maf, i_maf, None)
+        file_name = pathlib.Path.cwd().joinpath(
+            patient_id + "-ORG-STD" + "_genotyped.maf"
+        )
+        write_csv(file_name, df_o_s)
     elif o_maf is not None and ds_maf is not None:
         df_o_ds = camd(o_maf, None, ds_maf)
         file_name = pathlib.Path.cwd().joinpath(
@@ -498,6 +519,7 @@ def write_csv(file_name, data_frame):
         exit(1)
 
 
+# All
 @cli.command()
 @click.option(
     "-i",
@@ -600,7 +622,9 @@ def all(
     the output file will be labelled with 
     patient identifier as prefix
     """
-    logger_output = pathlib.Path.cwd().joinpath("genotype_variants.log")
+    pid = os.getpid()
+    logger_file = "genotype_variants_" + str(pid) + ".log"
+    logger_output = pathlib.Path.cwd().joinpath(logger_file)
     fh = logging.FileHandler(logger_output)
     formatter = logging.Formatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -632,7 +656,216 @@ def all(
         mapping_quality,
         threads,
     )
-    final_file = merge.callback(patient_id, input_maf, standard_maf, simplex_maf, duplex_maf)
+    final_file = merge.callback(
+        patient_id, input_maf, standard_maf, duplex_maf, simplex_maf
+    )
+    t1_stop = time.perf_counter()
+    t2_stop = time.process_time()
+    logger.info("--------------------------------------------------")
+    logger.info("Elapsed time: %.1f [min]" % ((t1_stop - t1_start) / 60))
+    logger.info("CPU process time: %.1f [min]" % ((t2_stop - t2_start) / 60))
+    logger.info("--------------------------------------------------")
+    return final_file
+
+
+# Multiple Sample Process
+@cli.command()
+@click.option(
+    "-i",
+    "--input-metadata",
+    required=True,
+    type=click.Path(exists=True),
+    help="Full path to metadata file in TSV/EXCEL format, with following headers: sample_id, maf, standard_bam, duplex_bam, simplex_bam. Make sure to use full paths inside the metadata file",
+)
+@click.option(
+    "-r",
+    "--reference-fasta",
+    required=True,
+    type=click.Path(exists=True),
+    help="Full path to reference file in FASTA format",
+)
+@click.option(
+    "-g",
+    "--gbcms-path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Full path to GetBaseCountMultiSample executable with fragment support",
+)
+@click.option(
+    "-fd",
+    "--filter-duplicate",
+    required=False,
+    default=0,
+    type=click.INT,
+    help="Filter duplicate parameter for GetBaseCountMultiSample",
+)
+@click.option(
+    "-fc",
+    "--fragment-count",
+    required=False,
+    default=1,
+    type=click.INT,
+    help="Fragment Count parameter for GetBaseCountMultiSample",
+)
+@click.option(
+    "-mapq",
+    "--mapping-quality",
+    required=False,
+    default=20,
+    type=click.INT,
+    help="Mapping quality for GetBaseCountMultiSample",
+)
+@click.option(
+    "-t",
+    "--threads",
+    required=False,
+    default=1,
+    type=click.INT,
+    help="Number of threads to use for GetBaseCountMultiSample",
+)
+@click_log.simple_verbosity_option(logger)
+def multiple_samples(
+    input_metadata,
+    reference_fasta,
+    gbcms_path,
+    filter_duplicate,
+    fragment_count,
+    mapping_quality,
+    threads,
+):
+    """
+    Command that helps to generate genotyped MAF and 
+    merge the genotyped MAF for multiple samples.
+    the output file will be labelled with 
+    patient identifier as prefix
+
+    Expected header of metadata_file in any order:
+    sample_id,
+    maf,
+    standard_bam,
+    duplex_bam,
+    simplex_bam
+    
+    For maf, standard_bam, duplex_bam and simplex_bam please include full path to the file.
+    """
+    pid = os.getpid()
+    logger_file = "genotype_variants_" + str(pid) + ".log"
+    logger_output = pathlib.Path.cwd().joinpath(logger_file)
+    fh = logging.FileHandler(logger_output)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%m/%d/%Y %I:%M:%S %p",
+    )
+    fh.setFormatter(formatter)
+    logger.addHandler(fh)
+    logger.info(
+        "========================================================================================"
+    )
+    logger.info(
+        ">>> Running genotype_variants for small variants to generate genotypes and merge MAF <<<"
+    )
+    logger.info(
+        "========================================================================================="
+    )
+    t1_start = time.perf_counter()
+    t2_start = time.process_time()
+    metadata = None
+    try:
+        metadata = pd.read_excel(input_metadata)
+    except:
+        e = sys.exc_info()[0]
+        logger.warning(
+            "genotype_variants:small_variants:multiple_samples:: could not read to EXCEL file, due to error: %s",
+            e,
+        )
+        logger.warning(
+            "genotype_variants:small_variants:multiple_samples:: Assuming its as TSV file"
+        )
+        pass
+    if metadata is None:
+        try:
+            metadata = pd.read_csv(input_metadata, sep="\t", header="infer")
+        except:
+            e = sys.exc_info()[0]
+            logger.error(
+                "genotype_variants:small_variants:multiple_samples:: could not read TSV file, due to error: %s. Please fix and rerun the script",
+                e,
+            )
+            exit(1)
+    else:
+        pass
+    for ind in metadata.index:
+        if pd.notnull(metadata["maf"][ind]):
+            if pathlib.Path(metadata["maf"][ind]).is_file():
+                input_maf = metadata["maf"][ind]
+            else:
+                logger.error(
+                    "genotype_variants::small_variants::multiple_samples:: Maf file to genotype variants is present but the path is invalid. Please provide a valid path"
+                )
+                exit(1)
+        else:
+            logger.error(
+                "genotype_variants::small_variants::multiple_samples:: Maf file to genotype variants is not present and is required."
+            )
+            exit(1)
+        if pd.notnull(metadata["standard_bam"][ind]):
+            if pathlib.Path(metadata["standard_bam"][ind]).is_file():
+                standard_bam = metadata["standard_bam"][ind]
+            else:
+                standard_bam = None
+        else:
+            standard_bam = None
+            logger.info(
+                "genotype_variants::small_variants::multiple_samples:: Standard BAM file to genotype variants is not present."
+            )
+        if pd.notnull(metadata["duplex_bam"][ind]):
+            if pathlib.Path(metadata["duplex_bam"][ind]).is_file():
+                duplex_bam = metadata["duplex_bam"][ind]
+            else:
+                duplex_bam = None
+        else:
+            duplex_bam = None
+        if pd.notnull(metadata["simplex_bam"][ind]):
+            if pathlib.Path(metadata["simplex_bam"][ind]).is_file():
+                simplex_bam = metadata["simplex_bam"][ind]
+            else:
+                simplex_bam = None
+        else:
+            simplex_bam = None
+
+        if standard_bam or duplex_bam or simplex_bam:
+            logger.info(
+                "genotype_variants::small_variants::multiple_samples:: standard_bam, duplex_bam and simplex_bam are present for genotype variants."
+            )
+        else:
+            logger.warning(
+                "genotype_variants::small_variants::multiple_samples:: one of standard_bam, duplex_bam and simplex_bam is not present for genotype variants! Either the Standard BAM or the Duplex BAM and the Simplex BAM should be present for genotype variants."
+            )
+
+        if pd.notnull(metadata["sample_id"][ind]):
+            sample_id = metadata["sample_id"][ind]
+        else:
+            logger.error(
+                "genotype_variants:small_variants:multiple_samples:: Sample id is not a string, please check input metadata file and try again."
+            )
+            exit(1)
+        logger.info(
+            "genotype_variants:small_variants::multiple_samples:: %s is being processed",
+            sample_id,
+        )
+        final_file = all.callback(
+            input_maf,
+            reference_fasta,
+            gbcms_path,
+            sample_id,
+            standard_bam,
+            duplex_bam,
+            simplex_bam,
+            filter_duplicate,
+            fragment_count,
+            mapping_quality,
+            threads,
+        )
     t1_stop = time.perf_counter()
     t2_stop = time.process_time()
     logger.info("--------------------------------------------------")

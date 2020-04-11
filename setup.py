@@ -10,7 +10,7 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=7.0', 'click_log>=0.3.2', 'pandas>=1.0.0']
+requirements = ['Click>=7.0', 'click_log>=0.3.2', 'pandas>=1.0.0', 'xlrd>=1.2.0']
 
 setup_requirements = [ ]
 
@@ -47,7 +47,7 @@ setup(
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,
-    url='https://github.com/rhshah/genotype_variants',
-    version='0.1.0',
+    url='https://github.com/msk-access/genotype_variants',
+    version='0.3.0',
     zip_safe=False,
 )
